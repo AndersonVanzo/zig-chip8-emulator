@@ -182,7 +182,9 @@ fn execute(self: *Chip8, instruction: Instruction) StepError!void {
             },
             // 8XY6 -> shift
             0x6 => {
-                return error.NotImplemented;
+                self.v[instruction.x] = self.v[instruction.y];
+                self.v[0xF] = self.v[instruction.x] & 1;
+                self.v[instruction.x] >>= 1;
             },
             // 8XY7 -> subtract
             0x7 => {
@@ -1254,6 +1256,77 @@ test "8XY5 uses registers X and Y, not V0 and V1" {
     }
 
     try std.testing.expectEqual(@as(u8, 0x40), machine.v[5]);
+    try std.testing.expectEqual(@as(u8, 0), machine.v[0]);
+}
+
+test "8XY6 copies VY into VX then shifts right" {
+    var machine = testMachine(&.{
+        // 0x200: 6184 -> V1 = 0b1000_0100
+        0x61, 0x84,
+        // 0x202: 8016 -> V0 = V1, then V0 >>= 1
+        0x80, 0x16,
+    });
+
+    try machine.step();
+    try machine.step();
+
+    try std.testing.expectEqual(@as(u8, 0b0100_0010), machine.v[0]);
+
+    // the bit that fell off the bottom was 0
+    try std.testing.expectEqual(@as(u8, 0), machine.v[0xF]);
+
+    // the source register is left alone
+    try std.testing.expectEqual(@as(u8, 0x84), machine.v[1]);
+}
+
+test "8XY6 puts the shifted-out bit in VF" {
+    var machine = testMachine(&.{
+        // 0x200: 6185 -> V1 = 0b1000_0101, lowest bit set
+        0x61, 0x85,
+        // 0x202: 8016 -> V0 = V1, then V0 >>= 1
+        0x80, 0x16,
+    });
+
+    try machine.step();
+    try machine.step();
+
+    try std.testing.expectEqual(@as(u8, 0b0100_0010), machine.v[0]);
+    try std.testing.expectEqual(@as(u8, 1), machine.v[0xF]);
+}
+
+test "8XY6 shifts VY, not the old contents of VX" {
+    var machine = testMachine(&.{
+        // 0x200: 60FF -> V0 = 0xFF, which must be thrown away
+        0x60, 0xFF,
+        // 0x202: 6102 -> V1 = 0x02
+        0x61, 0x02,
+        // 0x204: 8016 -> V0 = V1, then V0 >>= 1
+        0x80, 0x16,
+    });
+
+    for (0..3) |_| {
+        try machine.step();
+    }
+
+    // shifting VY gives 0x01 with VF = 0
+    // shifting the old VX in place would give 0x7F with VF = 1
+    try std.testing.expectEqual(@as(u8, 0x01), machine.v[0]);
+    try std.testing.expectEqual(@as(u8, 0), machine.v[0xF]);
+}
+
+test "8XY6 uses registers X and Y, not V0 and V1" {
+    var machine = testMachine(&.{
+        // 0x200: 6A85 -> VA = 0b1000_0101
+        0x6A, 0x85,
+        // 0x202: 85A6 -> V5 = VA, then V5 >>= 1
+        0x85, 0xA6,
+    });
+
+    try machine.step();
+    try machine.step();
+
+    try std.testing.expectEqual(@as(u8, 0b0100_0010), machine.v[5]);
+    try std.testing.expectEqual(@as(u8, 1), machine.v[0xF]);
     try std.testing.expectEqual(@as(u8, 0), machine.v[0]);
 }
 
