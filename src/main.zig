@@ -18,7 +18,11 @@ pub fn main(init: std.process.Init) !void {
     }
 
     const rom = try std.Io.Dir.cwd().readFileAlloc(io, args[1], arena, .limited(4096));
-    var machine = emulator.Chip8.init();
+
+    const rng_impl: std.Random.IoSource = .{ .io = io };
+    const rand = rng_impl.interface();
+
+    var machine = emulator.Chip8.init(rand);
     try machine.load(rom);
 
     for (0..cycle_budget) |_| {
