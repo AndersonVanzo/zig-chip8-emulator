@@ -109,7 +109,7 @@ fn execute(self: *Chip8, instruction: Instruction) StepError!void {
         },
         // 6XNN -> set register VX
         0x6 => {
-            return error.NotImplemented;
+            self.v[instruction.x] = instruction.nn;
         },
         // 7XNN -> add value to register VX
         0x7 => {
