@@ -96,7 +96,7 @@ pub fn step(self: *@This()) StepError!void {
     return self.execute(Instruction.decode(raw));
 }
 
-fn excute(self: *@This(), instruction: Instruction) StepError!void {
+fn execute(self: *Chip8, instruction: Instruction) StepError!void {
     switch (instruction.op) {
         0x0 => switch (instruction.nn) {
             // 0OE0 clears the display (CLS)
