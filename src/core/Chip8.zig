@@ -272,7 +272,7 @@ pub const Chip8 = struct {
                 },
                 // FX18 -> timer
                 0x18 => {
-                    return error.NotImplemented;
+                    self.sound_timer = self.v[instruction.x];
                 },
                 // FX1E -> add to index
                 0x1E => {
@@ -2012,5 +2012,51 @@ pub const Chip8 = struct {
         try machine.step();
 
         try std.testing.expectEqual(@as(u8, 0x2A), machine.delay_timer);
+    }
+
+    // FX18 tests
+    test "FX18 sets the sound timer from VX" {
+        var machine = testMachine(&.{
+            // 0x200: 602A -> V0 = 0x2A
+            0x60, 0x2A,
+            // 0x202: F018 -> sound timer = V0
+            0xF0, 0x18,
+        });
+
+        try machine.step();
+        try machine.step();
+
+        try std.testing.expectEqual(@as(u8, 0x2A), machine.sound_timer);
+        try std.testing.expectEqual(@as(u8, 0x2A), machine.v[0]);
+    }
+
+    test "FX18 does not touch the delay timer" {
+        var machine = testMachine(&.{
+            // 0x200: 602A -> V0 = 0x2A
+            0x60, 0x2A,
+            // 0x202: F018 -> sound timer = V0
+            0xF0, 0x18,
+        });
+        machine.delay_timer = 0x11;
+
+        try machine.step();
+        try machine.step();
+
+        try std.testing.expectEqual(@as(u8, 0x2A), machine.sound_timer);
+        try std.testing.expectEqual(@as(u8, 0x11), machine.delay_timer);
+    }
+
+    test "FX18 reads register X, not V0" {
+        var machine = testMachine(&.{
+            // 0x200: 652A -> V5 = 0x2A
+            0x65, 0x2A,
+            // 0x202: F518 -> sound timer = V5
+            0xF5, 0x18,
+        });
+
+        try machine.step();
+        try machine.step();
+
+        try std.testing.expectEqual(@as(u8, 0x2A), machine.sound_timer);
     }
 };
