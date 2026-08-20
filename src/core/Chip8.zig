@@ -102,7 +102,11 @@ fn execute(self: *Chip8, instruction: Instruction) StepError!void {
             // 00E0 clears the display (CLS)
             0xE0 => self.display.clear(),
             // 00EE -> subroutine
-            0xEE => return error.NotImplemented,
+            0xEE => {
+                self.sp -= 1;
+                self.pc = self.stack[self.sp];
+                self.stack[self.sp] = 0;
+            },
             else => return error.UnknownOpcode,
         },
         // 1NNN -> jump
@@ -339,6 +343,72 @@ test "00E0 clears the display" {
     _ = machine.display.xorPixel(10, 10);
     try machine.step();
     try std.testing.expect(!machine.display.get(10, 10));
+}
+
+test "00EE returns to the address on top of the stack" {
+    var machine = testMachine(&.{ 0x00, 0xEE });
+
+    // seed the stack by hand so this test only exercises 00EE
+    machine.stack[0] = 0x246;
+    machine.sp = 1;
+
+    try machine.step();
+
+    try std.testing.expectEqual(@as(u16, 0x246), machine.pc);
+    try std.testing.expectEqual(@as(u8, 0), machine.sp);
+}
+
+test "2NNN then 00EE lands on the instruction after the call" {
+    var machine = testMachine(&.{
+        // 0x200: 2204 -> call 0x204
+        0x22, 0x04,
+        // 0x202: 6001 -> V0 = 1, the instruction we should come back to
+        0x60, 0x01,
+        // 0x204: 00EE -> return
+        0x00, 0xEE,
+    });
+
+    try machine.step();
+    try machine.step();
+
+    try std.testing.expectEqual(@as(u16, 0x202), machine.pc);
+    try std.testing.expectEqual(@as(u8, 0), machine.sp);
+
+    // and execution actually carries on from there
+    try machine.step();
+    try std.testing.expectEqual(@as(u8, 1), machine.v[0]);
+}
+
+test "00EE unwinds nested calls one level at a time" {
+    var machine = testMachine(&.{
+        // 0x200: 2204 -> call 0x204
+        0x22, 0x04,
+        // 0x202: filler, only reached after both returns
+        0x00, 0x00,
+        // 0x204: 2208 -> call 0x208
+        0x22, 0x08,
+        // 0x206: 00EE -> inner return target, returns again
+        0x00, 0xEE,
+        // 0x208: 00EE -> return
+        0x00, 0xEE,
+    });
+
+    try machine.step();
+    try machine.step();
+
+    // two calls deep
+    try std.testing.expectEqual(@as(u16, 0x208), machine.pc);
+    try std.testing.expectEqual(@as(u8, 2), machine.sp);
+
+    // first return: back into the outer subroutine
+    try machine.step();
+    try std.testing.expectEqual(@as(u16, 0x206), machine.pc);
+    try std.testing.expectEqual(@as(u8, 1), machine.sp);
+
+    // second return: back to the top level
+    try machine.step();
+    try std.testing.expectEqual(@as(u16, 0x202), machine.pc);
+    try std.testing.expectEqual(@as(u8, 0), machine.sp);
 }
 
 // 0x1 tests
