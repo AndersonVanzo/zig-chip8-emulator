@@ -127,7 +127,9 @@ fn execute(self: *Chip8, instruction: Instruction) StepError!void {
         },
         // 4XNN -> skip conditionally
         0x4 => {
-            return error.NotImplemented;
+            if (self.v[instruction.x] != instruction.nn) {
+                self.pc += 2;
+            }
         },
         // 5XY0 -> skip conditionally
         0x5 => switch (instruction.n) {
@@ -566,6 +568,102 @@ test "3XNN skips on a register that is still zero" {
 }
 
 // 0x4 tests ------------------------------------------------------------------
+
+test "4XNN skips the next instruction when VX differs from NN" {
+    var machine = testMachine(&.{
+        // 0x200: 6042 -> V0 = 0x42
+        0x60, 0x42,
+        // 0x202: 4043 -> V0 != 0x43, so skip
+        0x40, 0x43,
+        // 0x204: 6099 -> must never run
+        0x60, 0x99,
+        // 0x206: 60AA -> V0 = 0xAA
+        0x60, 0xAA,
+    });
+
+    try machine.step();
+    try machine.step();
+
+    // pc moved 4: two for the 4XNN itself, two more for the skip
+    try std.testing.expectEqual(@as(u16, 0x206), machine.pc);
+
+    // and the skipped instruction really did not run
+    try machine.step();
+    try std.testing.expectEqual(@as(u8, 0xAA), machine.v[0]);
+}
+
+test "4XNN does not skip when VX equals NN" {
+    var machine = testMachine(&.{
+        // 0x200: 6042 -> V0 = 0x42
+        0x60, 0x42,
+        // 0x202: 4042 -> V0 == 0x42, so no skip
+        0x40, 0x42,
+        // 0x204: 6099 -> V0 = 0x99
+        0x60, 0x99,
+    });
+
+    try machine.step();
+    try machine.step();
+
+    try std.testing.expectEqual(@as(u16, 0x204), machine.pc);
+
+    try machine.step();
+    try std.testing.expectEqual(@as(u8, 0x99), machine.v[0]);
+}
+
+test "4XNN reads register X, not V0" {
+    var machine = testMachine(&.{
+        // 0x200: 657F -> V5 = 0x7F, V0 stays 0
+        0x65, 0x7F,
+        // 0x202: 4500 -> V5 != 0, so skip
+        //         reading V0 instead would compare 0 to 0 and not skip
+        0x45, 0x00,
+        // 0x204: filler, skipped
+        0x00, 0x00,
+    });
+
+    try machine.step();
+    try machine.step();
+
+    try std.testing.expectEqual(@as(u16, 0x206), machine.pc);
+}
+
+test "4XNN compares the whole byte, not just one nibble" {
+    var machine = testMachine(&.{
+        // 0x200: 601F -> V0 = 0x1F
+        0x60, 0x1F,
+        // 0x202: 402F -> same low nibble, different byte, so skip
+        0x40, 0x2F,
+        // 0x204: 6099 -> must never run
+        0x60, 0x99,
+        // 0x206: 60AA -> V0 = 0xAA
+        0x60, 0xAA,
+    });
+
+    try machine.step();
+    try machine.step();
+
+    try std.testing.expectEqual(@as(u16, 0x206), machine.pc);
+
+    try machine.step();
+    try std.testing.expectEqual(@as(u8, 0xAA), machine.v[0]);
+}
+
+test "4XNN does not skip on a register that is still zero" {
+    var machine = testMachine(&.{
+        // 0x200: 4300 -> V3 starts at 0, so no skip
+        0x43, 0x00,
+        // 0x202: 60AA -> V0 = 0xAA
+        0x60, 0xAA,
+    });
+
+    try machine.step();
+
+    try std.testing.expectEqual(@as(u16, 0x202), machine.pc);
+
+    try machine.step();
+    try std.testing.expectEqual(@as(u8, 0xAA), machine.v[0]);
+}
 
 // 0x5 tests ------------------------------------------------------------------
 
