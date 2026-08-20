@@ -194,7 +194,9 @@ fn execute(self: *Chip8, instruction: Instruction) StepError!void {
             },
             // 8XYE -> shift
             0xE => {
-                return error.NotImplemented;
+                self.v[instruction.x] = self.v[instruction.y];
+                self.v[0xF] = self.v[instruction.x] >> 7;
+                self.v[instruction.x] <<= 1;
             },
             else => return error.UnknownOpcode,
         },
@@ -1403,6 +1405,78 @@ test "8XY7 uses registers X and Y, not V0 and V1" {
     }
 
     try std.testing.expectEqual(@as(u8, 0x40), machine.v[5]);
+    try std.testing.expectEqual(@as(u8, 0), machine.v[0]);
+}
+
+test "8XYE copies VY into VX then shifts left" {
+    var machine = testMachine(&.{
+        // 0x200: 6121 -> V1 = 0b0010_0001
+        0x61, 0x21,
+        // 0x202: 801E -> V0 = V1, then V0 <<= 1
+        0x80, 0x1E,
+    });
+
+    try machine.step();
+    try machine.step();
+
+    try std.testing.expectEqual(@as(u8, 0b0100_0010), machine.v[0]);
+
+    // the bit that fell off the top was 0
+    try std.testing.expectEqual(@as(u8, 0), machine.v[0xF]);
+
+    // the source register is left alone
+    try std.testing.expectEqual(@as(u8, 0x21), machine.v[1]);
+}
+
+test "8XYE puts the shifted-out bit in VF" {
+    var machine = testMachine(&.{
+        // 0x200: 6181 -> V1 = 0b1000_0001, highest bit set
+        0x61, 0x81,
+        // 0x202: 801E -> V0 = V1, then V0 <<= 1
+        0x80, 0x1E,
+    });
+
+    try machine.step();
+    try machine.step();
+
+    // the top bit is dropped, not carried into the result
+    try std.testing.expectEqual(@as(u8, 0b0000_0010), machine.v[0]);
+    try std.testing.expectEqual(@as(u8, 1), machine.v[0xF]);
+}
+
+test "8XYE shifts VY, not the old contents of VX" {
+    var machine = testMachine(&.{
+        // 0x200: 60FF -> V0 = 0xFF, which must be thrown away
+        0x60, 0xFF,
+        // 0x202: 6101 -> V1 = 0x01
+        0x61, 0x01,
+        // 0x204: 801E -> V0 = V1, then V0 <<= 1
+        0x80, 0x1E,
+    });
+
+    for (0..3) |_| {
+        try machine.step();
+    }
+
+    // shifting VY gives 0x02 with VF = 0
+    // shifting the old VX in place would give 0xFE with VF = 1
+    try std.testing.expectEqual(@as(u8, 0x02), machine.v[0]);
+    try std.testing.expectEqual(@as(u8, 0), machine.v[0xF]);
+}
+
+test "8XYE uses registers X and Y, not V0 and V1" {
+    var machine = testMachine(&.{
+        // 0x200: 6A81 -> VA = 0b1000_0001
+        0x6A, 0x81,
+        // 0x202: 85AE -> V5 = VA, then V5 <<= 1
+        0x85, 0xAE,
+    });
+
+    try machine.step();
+    try machine.step();
+
+    try std.testing.expectEqual(@as(u8, 0b0000_0010), machine.v[5]);
+    try std.testing.expectEqual(@as(u8, 1), machine.v[0xF]);
     try std.testing.expectEqual(@as(u8, 0), machine.v[0]);
 }
 
