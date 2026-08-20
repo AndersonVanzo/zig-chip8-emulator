@@ -121,7 +121,29 @@ fn execute(self: *Chip8, instruction: Instruction) StepError!void {
         },
         // DXYN -> display/draw
         0xD => {
-            return error.NotImplemented;
+            const x = self.v[instruction.x] % Display.display_width;
+            const y = self.v[instruction.y] % Display.display_height;
+            self.v[0xF] = 0;
+
+            // N bytes starting at I
+            // one byte per row
+            const sprite = self.memory[self.i..][0..instruction.n];
+            for (sprite, 0..) |row_byte, row| {
+                const pixel_y = y + row;
+                // TODO: sprites clip at the bottom, stop if pixel_y is off screen
+                var mask: u8 = 0b1000_0000;
+                for (0..8) |column| {
+                    const pixel_x = x + column;
+                    // TODO: clip at the right edge too
+                    if ((row_byte & mask) != 0) {
+                        if (self.display.xorPixel(pixel_x, pixel_y)) {
+                            self.v[0xF] = 1;
+                        }
+                    }
+                    // moves one pixel right
+                    mask >>= 1;
+                }
+            }
         },
         else => return error.UnknownOpcode,
     }
