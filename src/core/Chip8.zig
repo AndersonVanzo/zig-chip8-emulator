@@ -111,7 +111,9 @@ fn execute(self: *Chip8, instruction: Instruction) StepError!void {
         },
         // 2NNN -> subroutine
         0x2 => {
-            return error.NotImplemented;
+            self.stack[self.sp] = self.pc;
+            self.sp += 1;
+            self.pc = instruction.nnn;
         },
         // 3XNN -> skip conditionally
         0x3 => {
@@ -347,6 +349,58 @@ test "1NNN jumps to exactly NNN" {
 }
 
 // 0x2 tests
+test "2NNN jumps to NNN and remembers where to come back to" {
+    var machine = testMachine(&.{ 0x22, 0x28 });
+    try machine.step();
+
+    // the jump part
+    try std.testing.expectEqual(@as(u16, 0x228), machine.pc);
+
+    // one stack entry in use, holding the address of the instruction
+    // *after* the call, because step() already advanced pc by 2
+    // before execute() ran
+    try std.testing.expectEqual(@as(u8, 1), machine.sp);
+    try std.testing.expectEqual(@as(u16, 0x202), machine.stack[0]);
+}
+
+test "2NNN nests, stacking one return address per call" {
+    var machine = testMachine(&.{
+        // 0x200: 2204 -> call 0x204
+        0x22, 0x04,
+        // 0x202: filler, never executed
+        0x00, 0x00,
+        // 0x204: 2208 -> call 0x208
+        0x22, 0x08,
+    });
+
+    try machine.step();
+    try machine.step();
+
+    try std.testing.expectEqual(@as(u16, 0x208), machine.pc);
+    try std.testing.expectEqual(@as(u8, 2), machine.sp);
+    try std.testing.expectEqual(@as(u16, 0x202), machine.stack[0]);
+    try std.testing.expectEqual(@as(u16, 0x206), machine.stack[1]);
+}
+
+test "2NNN leaves the registers alone" {
+    var machine = testMachine(&.{
+        // 0x200: 6042 -> V0 = 0x42
+        0x60, 0x42,
+        // 0x202: A123 -> I = 0x123
+        0xA1, 0x23,
+        // 0x204: 2300 -> call 0x300
+        0x23, 0x00,
+    });
+
+    for (0..3) |_| {
+        try machine.step();
+    }
+
+    // a call only touches pc, stack and sp
+    try std.testing.expectEqual(@as(u16, 0x300), machine.pc);
+    try std.testing.expectEqual(@as(u8, 0x42), machine.v[0]);
+    try std.testing.expectEqual(@as(u16, 0x123), machine.i);
+}
 
 // 0x3 tests
 
