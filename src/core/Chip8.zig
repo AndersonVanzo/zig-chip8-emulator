@@ -99,13 +99,34 @@ pub fn step(self: *@This()) StepError!void {
 fn execute(self: *Chip8, instruction: Instruction) StepError!void {
     switch (instruction.op) {
         0x0 => switch (instruction.nn) {
-            // 0OE0 clears the display (CLS)
+            // 00E0 clears the display (CLS)
             0xE0 => self.display.clear(),
+            // 00EE -> subroutine
+            0xEE => return error.NotImplemented,
             else => return error.UnknownOpcode,
         },
         // 1NNN -> jump
         0x1 => {
             self.pc = instruction.nnn;
+        },
+        // 2NNN -> subroutine
+        0x2 => {
+            return error.NotImplemented;
+        },
+        // 3XNN -> skip conditionally
+        0x3 => {
+            return error.NotImplemented;
+        },
+        // 4XNN -> skip conditionally
+        0x4 => {
+            return error.NotImplemented;
+        },
+        // 5XY0 -> skip conditionally
+        0x5 => switch (instruction.n) {
+            0x0 => {
+                return error.NotImplemented;
+            },
+            else => return error.UnknownOpcode,
         },
         // 6XNN -> set register VX
         0x6 => {
@@ -115,9 +136,63 @@ fn execute(self: *Chip8, instruction: Instruction) StepError!void {
         0x7 => {
             self.v[instruction.x] = self.v[instruction.x] +% instruction.nn;
         },
+        0x8 => switch (instruction.n) {
+            // 8XY0 -> set VX with value of VY
+            0x0 => {
+                return error.NotImplemented;
+            },
+            // 8XY1 -> binary OR
+            0x1 => {
+                return error.NotImplemented;
+            },
+            // 8XY2 -> binary AND
+            0x2 => {
+                return error.NotImplemented;
+            },
+            // 8XY3 -> logical XOR
+            0x3 => {
+                return error.NotImplemented;
+            },
+            // 8XY4 -> add
+            0x4 => {
+                return error.NotImplemented;
+            },
+            // 8XY5 -> subtract
+            0x5 => {
+                return error.NotImplemented;
+            },
+            // 8XY6 -> shift
+            0x6 => {
+                return error.NotImplemented;
+            },
+            // 8XY7 -> subtract
+            0x7 => {
+                return error.NotImplemented;
+            },
+            // 8XYE -> shift
+            0xE => {
+                return error.NotImplemented;
+            },
+            else => return error.UnknownOpcode,
+        },
+        // 9XY0 -> skip conditionally
+        0x9 => switch (instruction.n) {
+            0x0 => {
+                return error.NotImplemented;
+            },
+            else => return error.UnknownOpcode,
+        },
         // ANNN -> set index register I
         0xA => {
             self.i = instruction.nnn;
+        },
+        // BNNN -> jump with offset
+        0xB => {
+            return error.NotImplemented;
+        },
+        // CXNN -> random
+        0xC => {
+            return error.NotImplemented;
         },
         // DXYN -> display/draw
         0xD => {
@@ -145,7 +220,56 @@ fn execute(self: *Chip8, instruction: Instruction) StepError!void {
                 }
             }
         },
-        else => return error.UnknownOpcode,
+        0xE => switch (instruction.nn) {
+            // EX9E -> skip if key
+            0x9E => {
+                return error.NotImplemented;
+            },
+            // EXA1 -> skip if key
+            0xA1 => {
+                return error.NotImplemented;
+            },
+            else => return error.UnknownOpcode,
+        },
+        0xF => switch (instruction.nn) {
+            // FX07 -> timer
+            0x07 => {
+                return error.NotImplemented;
+            },
+            // FX15 -> timer
+            0x15 => {
+                return error.NotImplemented;
+            },
+            // FX18 -> timer
+            0x18 => {
+                return error.NotImplemented;
+            },
+            // FX1E -> add to index
+            0x1E => {
+                return error.NotImplemented;
+            },
+            // FX0A -> get key
+            0x0A => {
+                return error.NotImplemented;
+            },
+            // FX29 -> font character
+            0x29 => {
+                return error.NotImplemented;
+            },
+            // FX33 -> binary-coded decimal conversion
+            0x33 => {
+                return error.NotImplemented;
+            },
+            // FX55 -> store in memory
+            0x55 => {
+                return error.NotImplemented;
+            },
+            // FX65 -> loads form memory
+            0x65 => {
+                return error.NotImplemented;
+            },
+            else => return error.UnknownOpcode,
+        },
     }
 }
 
