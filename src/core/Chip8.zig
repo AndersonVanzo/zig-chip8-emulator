@@ -155,7 +155,8 @@ fn execute(self: *Chip8, instruction: Instruction) StepError!void {
             },
             // 8XY1 -> binary OR
             0x1 => {
-                return error.NotImplemented;
+                self.v[instruction.x] = self.v[instruction.x] | self.v[instruction.y];
+                self.v[0xF] = 0;
             },
             // 8XY2 -> binary AND
             0x2 => {
@@ -889,6 +890,76 @@ test "8XY0 advances pc by two, it never skips" {
     try machine.step();
 
     try std.testing.expectEqual(@as(u16, 0x202), machine.pc);
+}
+
+test "8XY1 ORs VY into VX" {
+    var machine = testMachine(&.{
+        // 0x200: 60A0 -> V0 = 0b1010_0000
+        0x60, 0xA0,
+        // 0x202: 6105 -> V1 = 0b0000_0101
+        0x61, 0x05,
+        // 0x204: 8011 -> V0 = V0 | V1
+        0x80, 0x11,
+    });
+
+    for (0..3) |_| {
+        try machine.step();
+    }
+
+    try std.testing.expectEqual(@as(u8, 0b1010_0101), machine.v[0]);
+
+    // the source register is left alone
+    try std.testing.expectEqual(@as(u8, 0x05), machine.v[1]);
+}
+
+test "8XY1 resets VF to zero" {
+    var machine = testMachine(&.{
+        // 0x200: 6F5A -> VF = 0x5A
+        0x6F, 0x5A,
+        // 0x202: 6001 -> V0 = 1
+        0x60, 0x01,
+        // 0x204: 8011 -> V0 = V0 | V1
+        0x80, 0x11,
+    });
+
+    for (0..3) |_| {
+        try machine.step();
+    }
+
+    // original CHIP-8 clears VF on the bitwise ops
+    try std.testing.expectEqual(@as(u8, 0), machine.v[0xF]);
+}
+
+test "8XY1 with zero leaves VX alone" {
+    var machine = testMachine(&.{
+        // 0x200: 6042 -> V0 = 0x42
+        0x60, 0x42,
+        // 0x202: 8011 -> V0 = V0 | V1, and V1 is still 0
+        0x80, 0x11,
+    });
+
+    try machine.step();
+    try machine.step();
+
+    try std.testing.expectEqual(@as(u8, 0x42), machine.v[0]);
+}
+
+test "8XY1 uses registers X and Y, not V0 and V1" {
+    var machine = testMachine(&.{
+        // 0x200: 65F0 -> V5 = 0xF0
+        0x65, 0xF0,
+        // 0x202: 6A0F -> VA = 0x0F
+        0x6A, 0x0F,
+        // 0x204: 85A1 -> V5 = V5 | VA
+        0x85, 0xA1,
+    });
+
+    for (0..3) |_| {
+        try machine.step();
+    }
+
+    try std.testing.expectEqual(@as(u8, 0xFF), machine.v[5]);
+    try std.testing.expectEqual(@as(u8, 0), machine.v[0]);
 }
 
 // 0x9 tests ------------------------------------------------------------------
