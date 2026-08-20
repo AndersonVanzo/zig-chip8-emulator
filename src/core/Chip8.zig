@@ -264,7 +264,7 @@ pub const Chip8 = struct {
             0xF => switch (instruction.nn) {
                 // FX07 -> timer
                 0x07 => {
-                    return error.NotImplemented;
+                    self.v[instruction.x] = self.delay_timer;
                 },
                 // FX15 -> timer
                 0x15 => {
@@ -1911,4 +1911,46 @@ pub const Chip8 = struct {
     // 0xE tests ------------------------------------------------------------------
 
     // 0xF tests ------------------------------------------------------------------
+
+    test "FX07 copies the delay timer into VX" {
+        var machine = testMachine(&.{
+            // 0x200: F007 -> V0 = delay timer
+            0xF0, 0x07,
+        });
+        machine.delay_timer = 0x2A;
+
+        try machine.step();
+
+        try std.testing.expectEqual(@as(u8, 0x2A), machine.v[0]);
+
+        // reading the timer does not consume it
+        try std.testing.expectEqual(@as(u8, 0x2A), machine.delay_timer);
+    }
+
+    test "FX07 overwrites VX even when the timer is zero" {
+        var machine = testMachine(&.{
+            // 0x200: 6099 -> V0 = 0x99
+            0x60, 0x99,
+            // 0x202: F007 -> V0 = delay timer, which is still 0
+            0xF0, 0x07,
+        });
+
+        try machine.step();
+        try machine.step();
+
+        try std.testing.expectEqual(@as(u8, 0), machine.v[0]);
+    }
+
+    test "FX07 writes register X, not V0" {
+        var machine = testMachine(&.{
+            // 0x200: F507 -> V5 = delay timer
+            0xF5, 0x07,
+        });
+        machine.delay_timer = 0x2A;
+
+        try machine.step();
+
+        try std.testing.expectEqual(@as(u8, 0x2A), machine.v[5]);
+        try std.testing.expectEqual(@as(u8, 0), machine.v[0]);
+    }
 };
