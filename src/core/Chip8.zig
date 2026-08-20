@@ -339,7 +339,7 @@ test "a whole small program draws a font glyph" {
     try std.testing.expect(machine.display.get(8, 7));
 }
 
-// 0x0 tests
+// 0x0 tests ------------------------------------------------------------------
 test "00E0 clears the display" {
     var machine = testMachine(&.{ 0x00, 0xE0 });
     _ = machine.display.xorPixel(10, 10);
@@ -413,14 +413,14 @@ test "00EE unwinds nested calls one level at a time" {
     try std.testing.expectEqual(@as(u8, 0), machine.sp);
 }
 
-// 0x1 tests
+// 0x1 tests ------------------------------------------------------------------
 test "1NNN jumps to exactly NNN" {
     var machine = testMachine(&.{ 0x12, 0x28 });
     try machine.step();
     try std.testing.expectEqual(@as(u16, 0x228), machine.pc);
 }
 
-// 0x2 tests
+// 0x2 tests ------------------------------------------------------------------
 test "2NNN jumps to NNN and remembers where to come back to" {
     var machine = testMachine(&.{ 0x22, 0x28 });
     try machine.step();
@@ -474,7 +474,7 @@ test "2NNN leaves the registers alone" {
     try std.testing.expectEqual(@as(u16, 0x123), machine.i);
 }
 
-// 0x3 tests
+// 0x3 tests ------------------------------------------------------------------
 test "3XNN skips the next instruction when VX equals NN" {
     var machine = testMachine(&.{
         // 0x200: 6042 -> V0 = 0x42
@@ -565,18 +565,18 @@ test "3XNN skips on a register that is still zero" {
     try std.testing.expectEqual(@as(u16, 0x204), machine.pc);
 }
 
-// 0x4 tests
+// 0x4 tests ------------------------------------------------------------------
 
-// 0x5 tests
+// 0x5 tests ------------------------------------------------------------------
 
-// 0x6 tests
+// 0x6 tests ------------------------------------------------------------------
 test "6XNN sets a register" {
     var machine = testMachine(&.{ 0x6A, 0x2F });
     try machine.step();
     try std.testing.expectEqual(@as(u8, 0x2F), machine.v[0xA]);
 }
 
-// 0x7 tests
+// 0x7 tests ------------------------------------------------------------------
 test "7XNN adds, wraps past 255 and leaves VF alone" {
     var machine = testMachine(&.{ 0x60, 0xFF, 0x70, 0x02 });
     try machine.step();
@@ -585,20 +585,20 @@ test "7XNN adds, wraps past 255 and leaves VF alone" {
     try std.testing.expectEqual(@as(u8, 0x00), machine.v[0xF]);
 }
 
-// 0x9 tests
+// 0x9 tests ------------------------------------------------------------------
 
-// 0xA tests
+// 0xA tests ------------------------------------------------------------------
 test "ANNN sets the index register" {
     var machine = testMachine(&.{ 0xA2, 0xF0 });
     try machine.step();
     try std.testing.expectEqual(@as(u16, 0x2F0), machine.i);
 }
 
-// 0xB tests
+// 0xB tests ------------------------------------------------------------------
 
-// 0xC tests
+// 0xC tests ------------------------------------------------------------------
 
-// 0xD tests
+// 0xD tests ------------------------------------------------------------------
 test "DXYN draws a sprite row and flags collisions" {
     var machine = testMachine(&.{
         // A20A: I = 0x20A (a spare byte past the program, set below)
@@ -650,6 +650,6 @@ test "DXYN clips at the right edge instead of wrapping" {
     try std.testing.expect(!machine.display.get(0, 0));
 }
 
-// 0xE tests
+// 0xE tests ------------------------------------------------------------------
 
-// 0xF tests
+// 0xF tests ------------------------------------------------------------------
