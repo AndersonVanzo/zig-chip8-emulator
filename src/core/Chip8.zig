@@ -160,7 +160,8 @@ fn execute(self: *Chip8, instruction: Instruction) StepError!void {
             },
             // 8XY2 -> binary AND
             0x2 => {
-                return error.NotImplemented;
+                self.v[instruction.x] = self.v[instruction.x] & self.v[instruction.y];
+                self.v[0xF] = 0;
             },
             // 8XY3 -> logical XOR
             0x3 => {
@@ -959,6 +960,73 @@ test "8XY1 uses registers X and Y, not V0 and V1" {
     }
 
     try std.testing.expectEqual(@as(u8, 0xFF), machine.v[5]);
+    try std.testing.expectEqual(@as(u8, 0), machine.v[0]);
+}
+
+test "8XY2 ANDs VY into VX" {
+    var machine = testMachine(&.{
+        // 0x200: 60F0 -> V0 = 0b1111_0000
+        0x60, 0xF0,
+        // 0x202: 613C -> V1 = 0b0011_1100
+        0x61, 0x3C,
+        // 0x204: 8012 -> V0 = V0 & V1
+        0x80, 0x12,
+    });
+
+    for (0..3) |_| {
+        try machine.step();
+    }
+
+    try std.testing.expectEqual(@as(u8, 0b0011_0000), machine.v[0]);
+    try std.testing.expectEqual(@as(u8, 0x3C), machine.v[1]);
+}
+
+test "8XY2 resets VF to zero" {
+    var machine = testMachine(&.{
+        // 0x200: 6F5A -> VF = 0x5A
+        0x6F, 0x5A,
+        // 0x202: 60FF -> V0 = 0xFF
+        0x60, 0xFF,
+        // 0x204: 8012 -> V0 = V0 & V1
+        0x80, 0x12,
+    });
+
+    for (0..3) |_| {
+        try machine.step();
+    }
+
+    try std.testing.expectEqual(@as(u8, 0), machine.v[0xF]);
+}
+
+test "8XY2 with zero clears VX" {
+    var machine = testMachine(&.{
+        // 0x200: 60FF -> V0 = 0xFF
+        0x60, 0xFF,
+        // 0x202: 8012 -> V0 = V0 & V1, and V1 is still 0
+        0x80, 0x12,
+    });
+
+    try machine.step();
+    try machine.step();
+
+    try std.testing.expectEqual(@as(u8, 0), machine.v[0]);
+}
+
+test "8XY2 uses registers X and Y, not V0 and V1" {
+    var machine = testMachine(&.{
+        // 0x200: 65FF -> V5 = 0xFF
+        0x65, 0xFF,
+        // 0x202: 6A3C -> VA = 0x3C
+        0x6A, 0x3C,
+        // 0x204: 85A2 -> V5 = V5 & VA
+        0x85, 0xA2,
+    });
+
+    for (0..3) |_| {
+        try machine.step();
+    }
+
+    try std.testing.expectEqual(@as(u8, 0x3C), machine.v[5]);
     try std.testing.expectEqual(@as(u8, 0), machine.v[0]);
 }
 
