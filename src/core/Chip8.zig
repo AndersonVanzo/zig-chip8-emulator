@@ -151,7 +151,7 @@ fn execute(self: *Chip8, instruction: Instruction) StepError!void {
         0x8 => switch (instruction.n) {
             // 8XY0 -> set VX with value of VY
             0x0 => {
-                return error.NotImplemented;
+                self.v[instruction.x] = self.v[instruction.y];
             },
             // 8XY1 -> binary OR
             0x1 => {
@@ -790,6 +790,105 @@ test "7XNN adds, wraps past 255 and leaves VF alone" {
     try machine.step();
     try std.testing.expectEqual(@as(u8, 0x01), machine.v[0]);
     try std.testing.expectEqual(@as(u8, 0x00), machine.v[0xF]);
+}
+
+// 0x8 tests ------------------------------------------------------------------
+
+test "8XY0 copies VY into VX, overwriting what was there" {
+    var machine = testMachine(&.{
+        // 0x200: 6099 -> V0 = 0x99
+        0x60, 0x99,
+        // 0x202: 6142 -> V1 = 0x42
+        0x61, 0x42,
+        // 0x204: 8010 -> V0 = V1
+        0x80, 0x10,
+    });
+
+    for (0..3) |_| {
+        try machine.step();
+    }
+
+    try std.testing.expectEqual(@as(u8, 0x42), machine.v[0]);
+
+    // the source register is left alone, this is a copy not a move
+    try std.testing.expectEqual(@as(u8, 0x42), machine.v[1]);
+}
+
+test "8XY0 writes X and reads Y, not V0 and V1" {
+    var machine = testMachine(&.{
+        // 0x200: 65AA -> V5 = 0xAA
+        0x65, 0xAA,
+        // 0x202: 6A33 -> VA = 0x33
+        0x6A, 0x33,
+        // 0x204: 85A0 -> V5 = VA
+        0x85, 0xA0,
+    });
+
+    for (0..3) |_| {
+        try machine.step();
+    }
+
+    try std.testing.expectEqual(@as(u8, 0x33), machine.v[5]);
+
+    // hardcoding V0/V1 would leave V5 at 0xAA and scribble on these
+    try std.testing.expectEqual(@as(u8, 0), machine.v[0]);
+    try std.testing.expectEqual(@as(u8, 0), machine.v[1]);
+}
+
+test "8XY0 can copy a zero over a nonzero VX" {
+    var machine = testMachine(&.{
+        // 0x200: 6099 -> V0 = 0x99
+        0x60, 0x99,
+        // 0x202: 8010 -> V0 = V1, and V1 is still 0
+        0x80, 0x10,
+    });
+
+    try machine.step();
+    try machine.step();
+
+    try std.testing.expectEqual(@as(u8, 0), machine.v[0]);
+}
+
+test "8XY0 is a no-op when X and Y name the same register" {
+    var machine = testMachine(&.{
+        // 0x200: 6377 -> V3 = 0x77
+        0x63, 0x77,
+        // 0x202: 8330 -> V3 = V3
+        0x83, 0x30,
+    });
+
+    try machine.step();
+    try machine.step();
+
+    try std.testing.expectEqual(@as(u8, 0x77), machine.v[3]);
+}
+
+test "8XY0 does not touch the flag register" {
+    var machine = testMachine(&.{
+        // 0x200: 6F5A -> VF = 0x5A
+        0x6F, 0x5A,
+        // 0x202: 6142 -> V1 = 0x42
+        0x61, 0x42,
+        // 0x204: 8010 -> V0 = V1
+        0x80, 0x10,
+    });
+
+    for (0..3) |_| {
+        try machine.step();
+    }
+
+    try std.testing.expectEqual(@as(u8, 0x42), machine.v[0]);
+
+    // only the arithmetic and shift variants write VF
+    try std.testing.expectEqual(@as(u8, 0x5A), machine.v[0xF]);
+}
+
+test "8XY0 advances pc by two, it never skips" {
+    var machine = testMachine(&.{ 0x80, 0x10 });
+
+    try machine.step();
+
+    try std.testing.expectEqual(@as(u16, 0x202), machine.pc);
 }
 
 // 0x9 tests ------------------------------------------------------------------
