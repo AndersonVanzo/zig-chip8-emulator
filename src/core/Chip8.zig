@@ -304,7 +304,6 @@ pub const Chip8 = struct {
     }
 
     // tests ----------------------------------------------------------------------
-
     fn testMachine(program: []const u8) @This() {
         var prng = std.Random.DefaultPrng.init(std.testing.random_seed);
         const rand = prng.random();
@@ -388,27 +387,6 @@ pub const Chip8 = struct {
         try std.testing.expectEqual(@as(u8, 0), machine.sp);
     }
 
-    test "2NNN then 00EE lands on the instruction after the call" {
-        var machine = testMachine(&.{
-            // 0x200: 2204 -> call 0x204
-            0x22, 0x04,
-            // 0x202: 6001 -> V0 = 1, the instruction we should come back to
-            0x60, 0x01,
-            // 0x204: 00EE -> return
-            0x00, 0xEE,
-        });
-
-        try machine.step();
-        try machine.step();
-
-        try std.testing.expectEqual(@as(u16, 0x202), machine.pc);
-        try std.testing.expectEqual(@as(u8, 0), machine.sp);
-
-        // and execution actually carries on from there
-        try machine.step();
-        try std.testing.expectEqual(@as(u8, 1), machine.v[0]);
-    }
-
     test "00EE unwinds nested calls one level at a time" {
         var machine = testMachine(&.{
             // 0x200: 2204 -> call 0x204
@@ -449,6 +427,27 @@ pub const Chip8 = struct {
     }
 
     // 0x2 tests ------------------------------------------------------------------
+    test "2NNN then 00EE lands on the instruction after the call" {
+        var machine = testMachine(&.{
+            // 0x200: 2204 -> call 0x204
+            0x22, 0x04,
+            // 0x202: 6001 -> V0 = 1, the instruction we should come back to
+            0x60, 0x01,
+            // 0x204: 00EE -> return
+            0x00, 0xEE,
+        });
+
+        try machine.step();
+        try machine.step();
+
+        try std.testing.expectEqual(@as(u16, 0x202), machine.pc);
+        try std.testing.expectEqual(@as(u8, 0), machine.sp);
+
+        // and execution actually carries on from there
+        try machine.step();
+        try std.testing.expectEqual(@as(u8, 1), machine.v[0]);
+    }
+
     test "2NNN jumps to NNN and remembers where to come back to" {
         var machine = testMachine(&.{ 0x22, 0x28 });
         try machine.step();
@@ -794,6 +793,8 @@ pub const Chip8 = struct {
         try std.testing.expectEqual(@as(u16, 0x206), machine.pc);
     }
 
+    // 5XY1 tests
+
     test "5XY1 is not a valid instruction" {
         // the pattern is 5XY0, so anything else in the last slot is unknown
         var machine = testMachine(&.{ 0x50, 0x11 });
@@ -915,6 +916,8 @@ pub const Chip8 = struct {
         try std.testing.expectEqual(@as(u16, 0x202), machine.pc);
     }
 
+    // 8XY1 tests
+
     test "8XY1 ORs VY into VX" {
         var machine = testMachine(&.{
             // 0x200: 60A0 -> V0 = 0b1010_0000
@@ -985,6 +988,8 @@ pub const Chip8 = struct {
         try std.testing.expectEqual(@as(u8, 0), machine.v[0]);
     }
 
+    // 8XY2 tests
+
     test "8XY2 ANDs VY into VX" {
         var machine = testMachine(&.{
             // 0x200: 60F0 -> V0 = 0b1111_0000
@@ -1052,6 +1057,8 @@ pub const Chip8 = struct {
         try std.testing.expectEqual(@as(u8, 0), machine.v[0]);
     }
 
+    // 8XY3
+
     test "8XY3 XORs VY into VX" {
         var machine = testMachine(&.{
             // 0x200: 60F0 -> V0 = 0b1111_0000
@@ -1118,6 +1125,8 @@ pub const Chip8 = struct {
         try std.testing.expectEqual(@as(u8, 0xF0), machine.v[5]);
         try std.testing.expectEqual(@as(u8, 0), machine.v[0]);
     }
+
+    // 8XY4 tests
 
     test "8XY4 adds VY to VX and clears VF when it fits" {
         var machine = testMachine(&.{
@@ -1194,6 +1203,8 @@ pub const Chip8 = struct {
         try std.testing.expectEqual(@as(u8, 0x31), machine.v[5]);
         try std.testing.expectEqual(@as(u8, 0), machine.v[0]);
     }
+
+    // 8XY5 tests
 
     test "8XY5 subtracts VY from VX and sets VF when there is no borrow" {
         var machine = testMachine(&.{
@@ -1274,6 +1285,8 @@ pub const Chip8 = struct {
         try std.testing.expectEqual(@as(u8, 0), machine.v[0]);
     }
 
+    // 8XY6 tests
+
     test "8XY6 copies VY into VX then shifts right" {
         var machine = testMachine(&.{
             // 0x200: 6184 -> V1 = 0b1000_0100
@@ -1344,6 +1357,8 @@ pub const Chip8 = struct {
         try std.testing.expectEqual(@as(u8, 1), machine.v[0xF]);
         try std.testing.expectEqual(@as(u8, 0), machine.v[0]);
     }
+
+    // 8XY7 tests
 
     test "8XY7 subtracts VX from VY and sets VF when there is no borrow" {
         var machine = testMachine(&.{
@@ -1418,6 +1433,8 @@ pub const Chip8 = struct {
         try std.testing.expectEqual(@as(u8, 0x40), machine.v[5]);
         try std.testing.expectEqual(@as(u8, 0), machine.v[0]);
     }
+
+    // 8XYE tests
 
     test "8XYE copies VY into VX then shifts left" {
         var machine = testMachine(&.{
@@ -1599,6 +1616,8 @@ pub const Chip8 = struct {
         try machine.step();
         try std.testing.expectEqual(@as(u8, 0xAA), machine.v[0]);
     }
+
+    // 9XY1 tests
 
     test "9XY1 is not a valid instruction" {
         // the pattern is 9XY0, so anything else in the last slot is unknown
