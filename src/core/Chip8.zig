@@ -170,7 +170,9 @@ fn execute(self: *Chip8, instruction: Instruction) StepError!void {
             },
             // 8XY4 -> add
             0x4 => {
-                return error.NotImplemented;
+                const result, const overflow = @addWithOverflow(self.v[instruction.x], self.v[instruction.y]);
+                self.v[instruction.x] = result;
+                self.v[0xF] = overflow;
             },
             // 8XY5 -> subtract
             0x5 => {
@@ -1095,6 +1097,82 @@ test "8XY3 uses registers X and Y, not V0 and V1" {
     }
 
     try std.testing.expectEqual(@as(u8, 0xF0), machine.v[5]);
+    try std.testing.expectEqual(@as(u8, 0), machine.v[0]);
+}
+
+test "8XY4 adds VY to VX and clears VF when it fits" {
+    var machine = testMachine(&.{
+        // 0x200: 6020 -> V0 = 0x20
+        0x60, 0x20,
+        // 0x202: 6111 -> V1 = 0x11
+        0x61, 0x11,
+        // 0x204: 8014 -> V0 = V0 + V1
+        0x80, 0x14,
+    });
+
+    for (0..3) |_| {
+        try machine.step();
+    }
+
+    try std.testing.expectEqual(@as(u8, 0x31), machine.v[0]);
+    try std.testing.expectEqual(@as(u8, 0), machine.v[0xF]);
+
+    // the source register is left alone
+    try std.testing.expectEqual(@as(u8, 0x11), machine.v[1]);
+}
+
+test "8XY4 wraps and sets VF on overflow" {
+    var machine = testMachine(&.{
+        // 0x200: 60FF -> V0 = 0xFF
+        0x60, 0xFF,
+        // 0x202: 6101 -> V1 = 0x01
+        0x61, 0x01,
+        // 0x204: 8014 -> 0xFF + 0x01 does not fit in a byte
+        0x80, 0x14,
+    });
+
+    for (0..3) |_| {
+        try machine.step();
+    }
+
+    // the low byte of the result is kept, VF records the carry
+    try std.testing.expectEqual(@as(u8, 0x00), machine.v[0]);
+    try std.testing.expectEqual(@as(u8, 1), machine.v[0xF]);
+}
+
+test "8XY4 keeps the low byte when the sum overflows by more than one" {
+    var machine = testMachine(&.{
+        // 0x200: 6090 -> V0 = 0x90
+        0x60, 0x90,
+        // 0x202: 6180 -> V1 = 0x80
+        0x61, 0x80,
+        // 0x204: 8014 -> 0x90 + 0x80 = 0x110
+        0x80, 0x14,
+    });
+
+    for (0..3) |_| {
+        try machine.step();
+    }
+
+    try std.testing.expectEqual(@as(u8, 0x10), machine.v[0]);
+    try std.testing.expectEqual(@as(u8, 1), machine.v[0xF]);
+}
+
+test "8XY4 uses registers X and Y, not V0 and V1" {
+    var machine = testMachine(&.{
+        // 0x200: 6520 -> V5 = 0x20
+        0x65, 0x20,
+        // 0x202: 6A11 -> VA = 0x11
+        0x6A, 0x11,
+        // 0x204: 85A4 -> V5 = V5 + VA
+        0x85, 0xA4,
+    });
+
+    for (0..3) |_| {
+        try machine.step();
+    }
+
+    try std.testing.expectEqual(@as(u8, 0x31), machine.v[5]);
     try std.testing.expectEqual(@as(u8, 0), machine.v[0]);
 }
 
