@@ -293,6 +293,45 @@ test "load rejects a ROM that would not fit" {
     try std.testing.expectError(error.RomTooLarge, machine.load(&too_big));
 }
 
+test "a whole small program draws a font glyph" {
+    var machine = testMachine(&.{
+        // 00E0: clear
+        0x00, 0xE0,
+        // A050: I = font address of '0'
+        0xA0, 0x50,
+        // 6005: V0 = 5 (x)
+        0x60, 0x05,
+        // 6103: V1 = 3 (y)
+        0x61, 0x03,
+        // D015: draw 5 rows
+        0xD0, 0x15,
+        // 120A: jump to self (0x20A)
+        0x12, 0x0A,
+    });
+
+    for (0..6) |_| {
+        try machine.step();
+    }
+
+    // the '0' glyph is F0 90 90 90 F0, a hollow rectangle 4 wide, 5 tall,
+    // drawn with its top-left corner at (5, 3)
+
+    // top row: four pixels lit, then dark
+    try std.testing.expect(machine.display.get(5, 3));
+    try std.testing.expect(machine.display.get(8, 3));
+    try std.testing.expect(!machine.display.get(9, 3));
+
+    // middle row: only the two sides.
+    try std.testing.expect(machine.display.get(5, 4));
+    try std.testing.expect(!machine.display.get(6, 4));
+    try std.testing.expect(machine.display.get(8, 4));
+
+    // bottom row solid again.
+    try std.testing.expect(machine.display.get(5, 7));
+    try std.testing.expect(machine.display.get(8, 7));
+}
+
+// 0x0 tests
 test "00E0 clears the display" {
     var machine = testMachine(&.{ 0x00, 0xE0 });
     _ = machine.display.xorPixel(10, 10);
@@ -300,12 +339,29 @@ test "00E0 clears the display" {
     try std.testing.expect(!machine.display.get(10, 10));
 }
 
+// 0x1 tests
+test "1NNN jumps to exactly NNN" {
+    var machine = testMachine(&.{ 0x12, 0x28 });
+    try machine.step();
+    try std.testing.expectEqual(@as(u16, 0x228), machine.pc);
+}
+
+// 0x2 tests
+
+// 0x3 tests
+
+// 0x4 tests
+
+// 0x5 tests
+
+// 0x6 tests
 test "6XNN sets a register" {
     var machine = testMachine(&.{ 0x6A, 0x2F });
     try machine.step();
     try std.testing.expectEqual(@as(u8, 0x2F), machine.v[0xA]);
 }
 
+// 0x7 tests
 test "7XNN adds, wraps past 255 and leaves VF alone" {
     var machine = testMachine(&.{ 0x60, 0xFF, 0x70, 0x02 });
     try machine.step();
@@ -314,18 +370,20 @@ test "7XNN adds, wraps past 255 and leaves VF alone" {
     try std.testing.expectEqual(@as(u8, 0x00), machine.v[0xF]);
 }
 
+// 0x9 tests
+
+// 0xA tests
 test "ANNN sets the index register" {
     var machine = testMachine(&.{ 0xA2, 0xF0 });
     try machine.step();
     try std.testing.expectEqual(@as(u16, 0x2F0), machine.i);
 }
 
-test "1NNN jumps to exactly NNN" {
-    var machine = testMachine(&.{ 0x12, 0x28 });
-    try machine.step();
-    try std.testing.expectEqual(@as(u16, 0x228), machine.pc);
-}
+// 0xB tests
 
+// 0xC tests
+
+// 0xD tests
 test "DXYN draws a sprite row and flags collisions" {
     var machine = testMachine(&.{
         // A20A: I = 0x20A (a spare byte past the program, set below)
@@ -377,40 +435,6 @@ test "DXYN clips at the right edge instead of wrapping" {
     try std.testing.expect(!machine.display.get(0, 0));
 }
 
-test "a whole small program draws a font glyph" {
-    var machine = testMachine(&.{
-        // 00E0: clear
-        0x00, 0xE0,
-        // A050: I = font address of '0'
-        0xA0, 0x50,
-        // 6005: V0 = 5 (x)
-        0x60, 0x05,
-        // 6103: V1 = 3 (y)
-        0x61, 0x03,
-        // D015: draw 5 rows
-        0xD0, 0x15,
-        // 120A: jump to self (0x20A)
-        0x12, 0x0A,
-    });
+// 0xE tests
 
-    for (0..6) |_| {
-        try machine.step();
-    }
-
-    // the '0' glyph is F0 90 90 90 F0, a hollow rectangle 4 wide, 5 tall,
-    // drawn with its top-left corner at (5, 3)
-
-    // top row: four pixels lit, then dark
-    try std.testing.expect(machine.display.get(5, 3));
-    try std.testing.expect(machine.display.get(8, 3));
-    try std.testing.expect(!machine.display.get(9, 3));
-
-    // middle row: only the two sides.
-    try std.testing.expect(machine.display.get(5, 4));
-    try std.testing.expect(!machine.display.get(6, 4));
-    try std.testing.expect(machine.display.get(8, 4));
-
-    // bottom row solid again.
-    try std.testing.expect(machine.display.get(5, 7));
-    try std.testing.expect(machine.display.get(8, 7));
-}
+// 0xF tests
