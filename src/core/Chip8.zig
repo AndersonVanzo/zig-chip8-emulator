@@ -215,7 +215,7 @@ fn execute(self: *Chip8, instruction: Instruction) StepError!void {
         },
         // BNNN -> jump with offset
         0xB => {
-            return error.NotImplemented;
+            self.pc = instruction.nnn + self.v[0x0];
         },
         // CXNN -> random
         0xC => {
@@ -1605,6 +1605,99 @@ test "ANNN sets the index register" {
 }
 
 // 0xB tests ------------------------------------------------------------------
+
+test "BNNN jumps to NNN plus V0" {
+    var machine = testMachine(&.{
+        // 0x200: 6002 -> V0 = 0x02
+        0x60, 0x02,
+        // 0x202: B300 -> pc = 0x300 + V0
+        0xB3, 0x00,
+    });
+
+    try machine.step();
+    try machine.step();
+
+    try std.testing.expectEqual(@as(u16, 0x302), machine.pc);
+}
+
+test "BNNN with V0 at zero is a plain jump to NNN" {
+    var machine = testMachine(&.{
+        // 0x200: B246 -> pc = 0x246 + 0
+        0xB2, 0x46,
+    });
+
+    try machine.step();
+
+    try std.testing.expectEqual(@as(u16, 0x246), machine.pc);
+}
+
+test "BNNN offsets by V0, not by VX" {
+    var machine = testMachine(&.{
+        // 0x200: 6002 -> V0 = 0x02
+        0x60, 0x02,
+        // 0x202: 6310 -> V3 = 0x10
+        0x63, 0x10,
+        // 0x204: B300 -> pc = 0x300 + V0
+        //         reading it as BXNN and offsetting by V3 would land on 0x310
+        0xB3, 0x00,
+    });
+
+    for (0..3) |_| {
+        try machine.step();
+    }
+
+    try std.testing.expectEqual(@as(u16, 0x302), machine.pc);
+}
+
+test "BNNN carries the offset past a page boundary" {
+    var machine = testMachine(&.{
+        // 0x200: 6002 -> V0 = 0x02
+        0x60, 0x02,
+        // 0x202: B2FF -> 0x2FF + 2 crosses into 0x3xx
+        0xB2, 0xFF,
+    });
+
+    try machine.step();
+    try machine.step();
+
+    try std.testing.expectEqual(@as(u16, 0x301), machine.pc);
+}
+
+test "BNNN adds the full byte of V0" {
+    var machine = testMachine(&.{
+        // 0x200: 60FF -> V0 = 0xFF, the largest offset there is
+        0x60, 0xFF,
+        // 0x202: B300 -> pc = 0x300 + 0xFF
+        0xB3, 0x00,
+    });
+
+    try machine.step();
+    try machine.step();
+
+    try std.testing.expectEqual(@as(u16, 0x3FF), machine.pc);
+}
+
+test "BNNN leaves V0, I and the stack alone" {
+    var machine = testMachine(&.{
+        // 0x200: 6002 -> V0 = 0x02
+        0x60, 0x02,
+        // 0x202: A123 -> I = 0x123
+        0xA1, 0x23,
+        // 0x204: B300 -> pc = 0x300 + V0
+        0xB3, 0x00,
+    });
+
+    for (0..3) |_| {
+        try machine.step();
+    }
+
+    try std.testing.expectEqual(@as(u16, 0x302), machine.pc);
+
+    // a jump is not a call, nothing is pushed and nothing else moves
+    try std.testing.expectEqual(@as(u8, 0x02), machine.v[0]);
+    try std.testing.expectEqual(@as(u16, 0x123), machine.i);
+    try std.testing.expectEqual(@as(u8, 0), machine.sp);
+}
 
 // 0xC tests ------------------------------------------------------------------
 
