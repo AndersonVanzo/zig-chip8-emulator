@@ -276,7 +276,7 @@ pub const Chip8 = struct {
                 },
                 // FX1E -> add to index
                 0x1E => {
-                    return error.NotImplemented;
+                    self.i = self.i +% self.v[instruction.x];
                 },
                 // FX0A -> get key
                 0x0A => {
@@ -2058,5 +2058,96 @@ pub const Chip8 = struct {
         try machine.step();
 
         try std.testing.expectEqual(@as(u8, 0x2A), machine.sound_timer);
+    }
+
+    // FX1E tests
+    test "FX1E adds VX to I" {
+        var machine = testMachine(&.{
+            // 0x200: A300 -> I = 0x300
+            0xA3, 0x00,
+            // 0x202: 6025 -> V0 = 0x25
+            0x60, 0x25,
+            // 0x204: F01E -> I += V0
+            0xF0, 0x1E,
+        });
+
+        for (0..3) |_| {
+            try machine.step();
+        }
+
+        try std.testing.expectEqual(@as(u16, 0x325), machine.i);
+
+        // the register is the source, it stays put
+        try std.testing.expectEqual(@as(u8, 0x25), machine.v[0]);
+    }
+
+    test "FX1E with VX at zero leaves I alone" {
+        var machine = testMachine(&.{
+            // 0x200: A300 -> I = 0x300
+            0xA3, 0x00,
+            // 0x202: F01E -> I += V0, which is still 0
+            0xF0, 0x1E,
+        });
+
+        try machine.step();
+        try machine.step();
+
+        try std.testing.expectEqual(@as(u16, 0x300), machine.i);
+    }
+
+    test "FX1E can push I past the 12 bit address space" {
+        var machine = testMachine(&.{
+            // 0x200: AFFF -> I = 0x0FFF, the last addressable byte
+            0xAF, 0xFF,
+            // 0x202: 6010 -> V0 = 0x10
+            0x60, 0x10,
+            // 0x204: F01E -> I += V0
+            0xF0, 0x1E,
+        });
+
+        for (0..3) |_| {
+            try machine.step();
+        }
+
+        // I is 16 bits wide precisely so this does not wrap or panic
+        try std.testing.expectEqual(@as(u16, 0x100F), machine.i);
+    }
+
+    test "FX1E does not touch the flag register" {
+        var machine = testMachine(&.{
+            // 0x200: 6F5A -> VF = 0x5A
+            0x6F, 0x5A,
+            // 0x202: A300 -> I = 0x300
+            0xA3, 0x00,
+            // 0x204: 6025 -> V0 = 0x25
+            0x60, 0x25,
+            // 0x206: F01E -> I += V0
+            0xF0, 0x1E,
+        });
+
+        for (0..4) |_| {
+            try machine.step();
+        }
+
+        try std.testing.expectEqual(@as(u16, 0x325), machine.i);
+        try std.testing.expectEqual(@as(u8, 0x5A), machine.v[0xF]);
+    }
+
+    test "FX1E reads register X, not V0" {
+        var machine = testMachine(&.{
+            // 0x200: A300 -> I = 0x300
+            0xA3, 0x00,
+            // 0x202: 6525 -> V5 = 0x25
+            0x65, 0x25,
+            // 0x204: F51E -> I += V5
+            0xF5, 0x1E,
+        });
+
+        for (0..3) |_| {
+            try machine.step();
+        }
+
+        // reading V0 instead would add nothing and leave I at 0x300
+        try std.testing.expectEqual(@as(u16, 0x325), machine.i);
     }
 };
