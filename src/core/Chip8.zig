@@ -134,7 +134,9 @@ fn execute(self: *Chip8, instruction: Instruction) StepError!void {
         // 5XY0 -> skip conditionally
         0x5 => switch (instruction.n) {
             0x0 => {
-                return error.NotImplemented;
+                if (self.v[instruction.x] == self.v[instruction.y]) {
+                    self.pc += 2;
+                }
             },
             else => return error.UnknownOpcode,
         },
@@ -666,6 +668,113 @@ test "4XNN does not skip on a register that is still zero" {
 }
 
 // 0x5 tests ------------------------------------------------------------------
+
+test "5XY0 skips the next instruction when VX equals VY" {
+    var machine = testMachine(&.{
+        // 0x200: 6042 -> V0 = 0x42
+        0x60, 0x42,
+        // 0x202: 6142 -> V1 = 0x42
+        0x61, 0x42,
+        // 0x204: 5010 -> V0 == V1, so skip
+        0x50, 0x10,
+        // 0x206: 6299 -> must never run
+        0x62, 0x99,
+        // 0x208: 62AA -> V2 = 0xAA
+        0x62, 0xAA,
+    });
+
+    for (0..3) |_| {
+        try machine.step();
+    }
+
+    // pc moved 4 over the 5XY0: two for itself, two more for the skip
+    try std.testing.expectEqual(@as(u16, 0x208), machine.pc);
+
+    // and the skipped instruction really did not run
+    try machine.step();
+    try std.testing.expectEqual(@as(u8, 0xAA), machine.v[2]);
+}
+
+test "5XY0 does not skip when VX differs from VY" {
+    var machine = testMachine(&.{
+        // 0x200: 6042 -> V0 = 0x42
+        0x60, 0x42,
+        // 0x202: 6143 -> V1 = 0x43
+        0x61, 0x43,
+        // 0x204: 5010 -> V0 != V1, so no skip
+        0x50, 0x10,
+        // 0x206: 6299 -> V2 = 0x99
+        0x62, 0x99,
+    });
+
+    for (0..3) |_| {
+        try machine.step();
+    }
+
+    try std.testing.expectEqual(@as(u16, 0x206), machine.pc);
+
+    try machine.step();
+    try std.testing.expectEqual(@as(u8, 0x99), machine.v[2]);
+}
+
+test "5XY0 reads registers X and Y, not V0 and V1" {
+    var machine = testMachine(&.{
+        // 0x200: 6001 -> V0 = 1
+        0x60, 0x01,
+        // 0x202: 6102 -> V1 = 2, so V0 != V1
+        0x61, 0x02,
+        // 0x204: 657F -> V5 = 0x7F
+        0x65, 0x7F,
+        // 0x206: 6A7F -> VA = 0x7F
+        0x6A, 0x7F,
+        // 0x208: 55A0 -> V5 == VA, so skip
+        //         comparing V0 to V1 instead would not skip
+        0x55, 0xA0,
+        // 0x20A: filler, skipped
+        0x00, 0x00,
+    });
+
+    for (0..5) |_| {
+        try machine.step();
+    }
+
+    try std.testing.expectEqual(@as(u16, 0x20C), machine.pc);
+}
+
+test "5XY0 skips when both registers are still zero" {
+    var machine = testMachine(&.{
+        // 0x200: 5340 -> V3 and V4 both start at 0, so skip
+        0x53, 0x40,
+        // 0x202: filler, skipped
+        0x00, 0x00,
+    });
+
+    try machine.step();
+
+    try std.testing.expectEqual(@as(u16, 0x204), machine.pc);
+}
+
+test "5XY0 always skips when X and Y name the same register" {
+    var machine = testMachine(&.{
+        // 0x200: 6377 -> V3 = 0x77
+        0x63, 0x77,
+        // 0x202: 5330 -> V3 == V3, so always skip
+        0x53, 0x30,
+        // 0x204: filler, skipped
+        0x00, 0x00,
+    });
+
+    try machine.step();
+    try machine.step();
+
+    try std.testing.expectEqual(@as(u16, 0x206), machine.pc);
+}
+
+test "5XY1 is not a valid instruction" {
+    // the pattern is 5XY0, so anything else in the last slot is unknown
+    var machine = testMachine(&.{ 0x50, 0x11 });
+    try std.testing.expectError(error.UnknownOpcode, machine.step());
+}
 
 // 0x6 tests ------------------------------------------------------------------
 test "6XNN sets a register" {
