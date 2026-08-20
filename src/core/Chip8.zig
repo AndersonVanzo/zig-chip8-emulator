@@ -268,7 +268,7 @@ pub const Chip8 = struct {
                 },
                 // FX15 -> timer
                 0x15 => {
-                    return error.NotImplemented;
+                    self.delay_timer = self.v[instruction.x];
                 },
                 // FX18 -> timer
                 0x18 => {
@@ -1952,5 +1952,65 @@ pub const Chip8 = struct {
 
         try std.testing.expectEqual(@as(u8, 0x2A), machine.v[5]);
         try std.testing.expectEqual(@as(u8, 0), machine.v[0]);
+    }
+
+    // FX15 tests
+    test "FX15 sets the delay timer from VX" {
+        var machine = testMachine(&.{
+            // 0x200: 602A -> V0 = 0x2A
+            0x60, 0x2A,
+            // 0x202: F015 -> delay timer = V0
+            0xF0, 0x15,
+        });
+
+        try machine.step();
+        try machine.step();
+
+        try std.testing.expectEqual(@as(u8, 0x2A), machine.delay_timer);
+
+        // the register is the source, it stays put
+        try std.testing.expectEqual(@as(u8, 0x2A), machine.v[0]);
+    }
+
+    test "FX15 can set the delay timer back to zero" {
+        var machine = testMachine(&.{
+            // 0x200: F015 -> delay timer = V0, which is still 0
+            0xF0, 0x15,
+        });
+        machine.delay_timer = 0x2A;
+
+        try machine.step();
+
+        try std.testing.expectEqual(@as(u8, 0), machine.delay_timer);
+    }
+
+    test "FX15 does not touch the sound timer" {
+        var machine = testMachine(&.{
+            // 0x200: 602A -> V0 = 0x2A
+            0x60, 0x2A,
+            // 0x202: F015 -> delay timer = V0
+            0xF0, 0x15,
+        });
+        machine.sound_timer = 0x11;
+
+        try machine.step();
+        try machine.step();
+
+        try std.testing.expectEqual(@as(u8, 0x2A), machine.delay_timer);
+        try std.testing.expectEqual(@as(u8, 0x11), machine.sound_timer);
+    }
+
+    test "FX15 reads register X, not V0" {
+        var machine = testMachine(&.{
+            // 0x200: 652A -> V5 = 0x2A
+            0x65, 0x2A,
+            // 0x202: F515 -> delay timer = V5
+            0xF5, 0x15,
+        });
+
+        try machine.step();
+        try machine.step();
+
+        try std.testing.expectEqual(@as(u8, 0x2A), machine.delay_timer);
     }
 };
