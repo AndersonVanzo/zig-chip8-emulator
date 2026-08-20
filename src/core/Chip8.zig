@@ -188,7 +188,9 @@ fn execute(self: *Chip8, instruction: Instruction) StepError!void {
             },
             // 8XY7 -> subtract
             0x7 => {
-                return error.NotImplemented;
+                self.v[0xF] = if (self.v[instruction.y] >= self.v[instruction.x]) 1 else 0;
+                const result = self.v[instruction.y] -% self.v[instruction.x];
+                self.v[instruction.x] = result;
             },
             // 8XYE -> shift
             0xE => {
@@ -1327,6 +1329,80 @@ test "8XY6 uses registers X and Y, not V0 and V1" {
 
     try std.testing.expectEqual(@as(u8, 0b0100_0010), machine.v[5]);
     try std.testing.expectEqual(@as(u8, 1), machine.v[0xF]);
+    try std.testing.expectEqual(@as(u8, 0), machine.v[0]);
+}
+
+test "8XY7 subtracts VX from VY and sets VF when there is no borrow" {
+    var machine = testMachine(&.{
+        // 0x200: 6002 -> V0 = 0x02
+        0x60, 0x02,
+        // 0x202: 6142 -> V1 = 0x42
+        0x61, 0x42,
+        // 0x204: 8017 -> V0 = V1 - V0, note the order is flipped from 8XY5
+        0x80, 0x17,
+    });
+
+    for (0..3) |_| {
+        try machine.step();
+    }
+
+    try std.testing.expectEqual(@as(u8, 0x40), machine.v[0]);
+    try std.testing.expectEqual(@as(u8, 1), machine.v[0xF]);
+
+    try std.testing.expectEqual(@as(u8, 0x42), machine.v[1]);
+}
+
+test "8XY7 wraps and clears VF when it borrows" {
+    var machine = testMachine(&.{
+        // 0x200: 6042 -> V0 = 0x42
+        0x60, 0x42,
+        // 0x202: 6102 -> V1 = 0x02
+        0x61, 0x02,
+        // 0x204: 8017 -> 0x02 - 0x42 goes below zero
+        0x80, 0x17,
+    });
+
+    for (0..3) |_| {
+        try machine.step();
+    }
+
+    try std.testing.expectEqual(@as(u8, 0xC0), machine.v[0]);
+    try std.testing.expectEqual(@as(u8, 0), machine.v[0xF]);
+}
+
+test "8XY7 with equal registers gives zero and no borrow" {
+    var machine = testMachine(&.{
+        // 0x200: 6033 -> V0 = 0x33
+        0x60, 0x33,
+        // 0x202: 6133 -> V1 = 0x33
+        0x61, 0x33,
+        // 0x204: 8017 -> V0 = V1 - V0
+        0x80, 0x17,
+    });
+
+    for (0..3) |_| {
+        try machine.step();
+    }
+
+    try std.testing.expectEqual(@as(u8, 0), machine.v[0]);
+    try std.testing.expectEqual(@as(u8, 1), machine.v[0xF]);
+}
+
+test "8XY7 uses registers X and Y, not V0 and V1" {
+    var machine = testMachine(&.{
+        // 0x200: 6502 -> V5 = 0x02
+        0x65, 0x02,
+        // 0x202: 6A42 -> VA = 0x42
+        0x6A, 0x42,
+        // 0x204: 85A7 -> V5 = VA - V5
+        0x85, 0xA7,
+    });
+
+    for (0..3) |_| {
+        try machine.step();
+    }
+
+    try std.testing.expectEqual(@as(u8, 0x40), machine.v[5]);
     try std.testing.expectEqual(@as(u8, 0), machine.v[0]);
 }
 
