@@ -117,7 +117,7 @@ fn execute(self: *Chip8, instruction: Instruction) StepError!void {
         },
         // ANNN -> set index register I
         0xA => {
-            return error.NotImplemented;
+            self.i = instruction.nnn;
         },
         // DXYN -> display/draw
         0xD => {
@@ -171,7 +171,7 @@ test "7XNN adds, wraps past 255 and leaves VF alone" {
 test "ANNN sets the index register" {
     var machine = testMachine(&.{ 0xA2, 0xF0 });
     try machine.step();
-    try std.testing.expectEqual(@as(u16, 0x228), machine.pc);
+    try std.testing.expectEqual(@as(u16, 0x2F0), machine.i);
 }
 
 test "1NNN jumps to exactly NNN" {
