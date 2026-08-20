@@ -105,7 +105,7 @@ fn execute(self: *Chip8, instruction: Instruction) StepError!void {
         },
         // 1NNN -> jump
         0x1 => {
-            return error.NotImplemented;
+            self.pc = instruction.nnn;
         },
         // 6XNN -> set register VX
         0x6 => {
