@@ -5,3 +5,15 @@ zig-out/
 
 # Zig package manager dependencies (introduced in Zig v0.14.0 / 2026 devlogs)
 zig-pkg/
+
+# ROMs are not distributed with this repo
+roms/**/*.ch8
+roms/**/*.c8
+roms/**/*.rom
+roms/**/*.bin
+roms/**/*.8o
+
+# Editor / OS noise
+.DS_Store
+.vscode/
+.idea/
