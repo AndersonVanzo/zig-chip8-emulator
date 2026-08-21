@@ -316,7 +316,10 @@ pub const Chip8 = struct {
                 },
                 // FX65 -> loads form memory
                 0x65 => {
-                    return error.NotImplemented;
+                    for (0..instruction.x + 1) |value| {
+                        self.v[value] = self.memory[self.i];
+                        self.i += 1;
+                    }
                 },
                 else => return error.UnknownOpcode,
             },
@@ -2426,6 +2429,110 @@ pub const Chip8 = struct {
         });
 
         for (0..4) |_| {
+            try machine.step();
+        }
+
+        try std.testing.expectEqual(@as(u8, 0x11), machine.v[0]);
+        try std.testing.expectEqual(@as(u8, 0x22), machine.v[1]);
+    }
+
+    // FX65 tests
+    test "FX65 loads V0 through VX inclusive" {
+        var machine = testMachine(&.{
+            // 0x200: A300 -> I = 0x300
+            0xA3, 0x00,
+            // 0x202: F365 -> load V0..V3 from I
+            0xF3, 0x65,
+        });
+        machine.memory[0x300] = 0x11;
+        machine.memory[0x301] = 0x22;
+        machine.memory[0x302] = 0x33;
+        machine.memory[0x303] = 0x44;
+        machine.memory[0x304] = 0x55;
+
+        try machine.step();
+        try machine.step();
+
+        try std.testing.expectEqual(@as(u8, 0x11), machine.v[0]);
+        try std.testing.expectEqual(@as(u8, 0x22), machine.v[1]);
+        try std.testing.expectEqual(@as(u8, 0x33), machine.v[2]);
+        try std.testing.expectEqual(@as(u8, 0x44), machine.v[3]);
+
+        // VX is inclusive, but the byte after it is not read
+        try std.testing.expectEqual(@as(u8, 0), machine.v[4]);
+    }
+
+    test "FX65 with X of zero loads a single register" {
+        var machine = testMachine(&.{
+            // 0x200: A300 -> I = 0x300
+            0xA3, 0x00,
+            // 0x202: F065 -> load V0 only
+            0xF0, 0x65,
+        });
+        machine.memory[0x300] = 0x11;
+        machine.memory[0x301] = 0x22;
+
+        try machine.step();
+        try machine.step();
+
+        try std.testing.expectEqual(@as(u8, 0x11), machine.v[0]);
+        try std.testing.expectEqual(@as(u8, 0), machine.v[1]);
+    }
+
+    test "FX65 advances I past the bytes it read" {
+        var machine = testMachine(&.{
+            // 0x200: A300 -> I = 0x300
+            0xA3, 0x00,
+            // 0x202: F365 -> load V0..V3 from I
+            0xF3, 0x65,
+        });
+
+        try machine.step();
+        try machine.step();
+
+        // same rule as FX55, I += X + 1
+        try std.testing.expectEqual(@as(u16, 0x304), machine.i);
+    }
+
+    test "FX65 leaves memory alone" {
+        var machine = testMachine(&.{
+            // 0x200: A300 -> I = 0x300
+            0xA3, 0x00,
+            // 0x202: F165 -> load V0..V1 from I
+            0xF1, 0x65,
+        });
+        machine.memory[0x300] = 0x11;
+        machine.memory[0x301] = 0x22;
+
+        try machine.step();
+        try machine.step();
+
+        // a load is a copy, the source bytes stay put
+        try std.testing.expectEqual(@as(u8, 0x11), machine.memory[0x300]);
+        try std.testing.expectEqual(@as(u8, 0x22), machine.memory[0x301]);
+    }
+
+    test "FX55 then FX65 round trips the registers" {
+        var machine = testMachine(&.{
+            // 0x200: A300 -> I = 0x300
+            0xA3, 0x00,
+            // 0x202: 6011 -> V0 = 0x11
+            0x60, 0x11,
+            // 0x204: 6122 -> V1 = 0x22
+            0x61, 0x22,
+            // 0x206: F155 -> store V0..V1 at I
+            0xF1, 0x55,
+            // 0x208: 6000 -> V0 = 0, wipe the registers
+            0x60, 0x00,
+            // 0x20A: 6100 -> V1 = 0
+            0x61, 0x00,
+            // 0x20C: A300 -> I = 0x300 again, since FX55 moved it
+            0xA3, 0x00,
+            // 0x20E: F165 -> load V0..V1 back
+            0xF1, 0x65,
+        });
+
+        for (0..8) |_| {
             try machine.step();
         }
 
