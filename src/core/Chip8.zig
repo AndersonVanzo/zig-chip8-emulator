@@ -284,7 +284,9 @@ pub const Chip8 = struct {
                 },
                 // FX29 -> font character
                 0x29 => {
-                    return error.NotImplemented;
+                    const vx = @as(u16, self.v[instruction.x]);
+                    const index = font.base_address + (vx * font.bytes_per_glyph);
+                    self.i = index;
                 },
                 // FX33 -> binary-coded decimal conversion
                 0x33 => {
@@ -2149,5 +2151,81 @@ pub const Chip8 = struct {
 
         // reading V0 instead would add nothing and leave I at 0x300
         try std.testing.expectEqual(@as(u16, 0x325), machine.i);
+    }
+
+    // FX29 tests
+    test "FX29 points I at the glyph for digit zero" {
+        var machine = testMachine(&.{
+            // 0x200: F029 -> I = address of the glyph for V0, which is 0
+            0xF0, 0x29,
+        });
+
+        try machine.step();
+
+        try std.testing.expectEqual(@as(u16, font.base_address), machine.i);
+    }
+
+    test "FX29 strides five bytes per glyph" {
+        var machine = testMachine(&.{
+            // 0x200: 6005 -> V0 = 5
+            0x60, 0x05,
+            // 0x202: F029 -> I = address of the glyph for '5'
+            0xF0, 0x29,
+        });
+
+        try machine.step();
+        try machine.step();
+
+        // each glyph is 5 bytes, so '5' starts 25 bytes in
+        try std.testing.expectEqual(@as(u16, font.base_address + 25), machine.i);
+    }
+
+    test "FX29 reaches the hex digits above nine" {
+        var machine = testMachine(&.{
+            // 0x200: 600F -> V0 = 0xF
+            0x60, 0x0F,
+            // 0x202: F029 -> I = address of the glyph for 'F'
+            0xF0, 0x29,
+        });
+
+        try machine.step();
+        try machine.step();
+
+        try std.testing.expectEqual(@as(u16, font.base_address + 75), machine.i);
+    }
+
+    test "FX29 lands on the real glyph bytes" {
+        var machine = testMachine(&.{
+            // 0x200: 6003 -> V0 = 3
+            0x60, 0x03,
+            // 0x202: F029 -> I = address of the glyph for '3'
+            0xF0, 0x29,
+        });
+
+        try machine.step();
+        try machine.step();
+
+        // whatever the address works out to, the five bytes there must be
+        // the '3' sprite from the font table
+        try std.testing.expectEqualSlices(
+            u8,
+            font.sprites[15..20],
+            machine.memory[machine.i..][0..5],
+        );
+    }
+
+    test "FX29 reads register X, not V0" {
+        var machine = testMachine(&.{
+            // 0x200: 6505 -> V5 = 5
+            0x65, 0x05,
+            // 0x202: F529 -> I = address of the glyph for V5
+            0xF5, 0x29,
+        });
+
+        try machine.step();
+        try machine.step();
+
+        // reading V0 instead would point at the glyph for 0
+        try std.testing.expectEqual(@as(u16, font.base_address + 25), machine.i);
     }
 };
