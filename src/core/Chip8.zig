@@ -309,7 +309,10 @@ pub const Chip8 = struct {
                 },
                 // FX55 -> store in memory
                 0x55 => {
-                    return error.NotImplemented;
+                    for (0..instruction.x + 1) |value| {
+                        self.memory[self.i] = self.v[value];
+                        self.i += 1;
+                    }
                 },
                 // FX65 -> loads form memory
                 0x65 => {
@@ -2342,5 +2345,91 @@ pub const Chip8 = struct {
         try std.testing.expectEqual(@as(u8, 1), machine.memory[0x300]);
         try std.testing.expectEqual(@as(u8, 5), machine.memory[0x301]);
         try std.testing.expectEqual(@as(u8, 6), machine.memory[0x302]);
+    }
+
+    // FX55 tests
+    test "FX55 stores V0 through VX inclusive" {
+        var machine = testMachine(&.{
+            // 0x200: A300 -> I = 0x300
+            0xA3, 0x00,
+            // 0x202: 6011 -> V0 = 0x11
+            0x60, 0x11,
+            // 0x204: 6122 -> V1 = 0x22
+            0x61, 0x22,
+            // 0x206: 6233 -> V2 = 0x33
+            0x62, 0x33,
+            // 0x208: 6344 -> V3 = 0x44
+            0x63, 0x44,
+            // 0x20A: F355 -> store V0..V3 at I
+            0xF3, 0x55,
+        });
+
+        for (0..6) |_| {
+            try machine.step();
+        }
+
+        try std.testing.expectEqualSlices(
+            u8,
+            &.{ 0x11, 0x22, 0x33, 0x44 },
+            machine.memory[0x300..0x304],
+        );
+
+        // VX is inclusive, but nothing beyond it is written
+        try std.testing.expectEqual(@as(u8, 0), machine.memory[0x304]);
+    }
+
+    test "FX55 with X of zero stores a single byte" {
+        var machine = testMachine(&.{
+            // 0x200: A300 -> I = 0x300
+            0xA3, 0x00,
+            // 0x202: 6011 -> V0 = 0x11
+            0x60, 0x11,
+            // 0x204: 6122 -> V1 = 0x22, must not be stored
+            0x61, 0x22,
+            // 0x206: F055 -> store V0 only
+            0xF0, 0x55,
+        });
+
+        for (0..4) |_| {
+            try machine.step();
+        }
+
+        try std.testing.expectEqual(@as(u8, 0x11), machine.memory[0x300]);
+        try std.testing.expectEqual(@as(u8, 0), machine.memory[0x301]);
+    }
+
+    test "FX55 advances I past the bytes it wrote" {
+        var machine = testMachine(&.{
+            // 0x200: A300 -> I = 0x300
+            0xA3, 0x00,
+            // 0x202: F355 -> store V0..V3 at I
+            0xF3, 0x55,
+        });
+
+        try machine.step();
+        try machine.step();
+
+        // original CHIP-8 leaves I just past the last byte, so I += X + 1
+        try std.testing.expectEqual(@as(u16, 0x304), machine.i);
+    }
+
+    test "FX55 leaves the registers alone" {
+        var machine = testMachine(&.{
+            // 0x200: A300 -> I = 0x300
+            0xA3, 0x00,
+            // 0x202: 6011 -> V0 = 0x11
+            0x60, 0x11,
+            // 0x204: 6122 -> V1 = 0x22
+            0x61, 0x22,
+            // 0x206: F155 -> store V0..V1 at I
+            0xF1, 0x55,
+        });
+
+        for (0..4) |_| {
+            try machine.step();
+        }
+
+        try std.testing.expectEqual(@as(u8, 0x11), machine.v[0]);
+        try std.testing.expectEqual(@as(u8, 0x22), machine.v[1]);
     }
 };
