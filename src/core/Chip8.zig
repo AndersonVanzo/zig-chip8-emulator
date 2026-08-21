@@ -290,7 +290,22 @@ pub const Chip8 = struct {
                 },
                 // FX33 -> binary-coded decimal conversion
                 0x33 => {
-                    return error.NotImplemented;
+                    // TODO: improve this later pleeease this is ugly af
+                    const vx = self.v[instruction.x];
+                    const unit = vx % 10;
+                    const decimal = ((vx % 100) - unit) / 10;
+                    const one_hundred_or_more: u8 = 99;
+                    const two_hundred_or_more: u8 = 199;
+                    var hundred: u8 = 0;
+                    if (vx > one_hundred_or_more) {
+                        hundred = 1;
+                    }
+                    if (vx > two_hundred_or_more) {
+                        hundred = 2;
+                    }
+                    self.memory[self.i] = hundred;
+                    self.memory[self.i + 1] = decimal;
+                    self.memory[self.i + 2] = unit;
                 },
                 // FX55 -> store in memory
                 0x55 => {
@@ -2227,5 +2242,105 @@ pub const Chip8 = struct {
 
         // reading V0 instead would point at the glyph for 0
         try std.testing.expectEqual(@as(u16, font.base_address + 25), machine.i);
+    }
+
+    // FX33 tests
+    test "FX33 writes the three decimal digits of VX" {
+        var machine = testMachine(&.{
+            // 0x200: A300 -> I = 0x300
+            0xA3, 0x00,
+            // 0x202: 609C -> V0 = 156
+            0x60, 0x9C,
+            // 0x204: F033 -> store 1, 5, 6 at I
+            0xF0, 0x33,
+        });
+
+        for (0..3) |_| {
+            try machine.step();
+        }
+
+        try std.testing.expectEqual(@as(u8, 1), machine.memory[0x300]);
+        try std.testing.expectEqual(@as(u8, 5), machine.memory[0x301]);
+        try std.testing.expectEqual(@as(u8, 6), machine.memory[0x302]);
+
+        // digits, not characters, and the source register is untouched
+        try std.testing.expectEqual(@as(u8, 156), machine.v[0]);
+    }
+
+    test "FX33 pads short numbers with leading zeros" {
+        var machine = testMachine(&.{
+            // 0x200: A300 -> I = 0x300
+            0xA3, 0x00,
+            // 0x202: 6009 -> V0 = 9
+            0x60, 0x09,
+            // 0x204: F033 -> store 0, 0, 9 at I
+            0xF0, 0x33,
+        });
+
+        for (0..3) |_| {
+            try machine.step();
+        }
+
+        // always exactly three bytes, never right-aligned or shortened
+        try std.testing.expectEqual(@as(u8, 0), machine.memory[0x300]);
+        try std.testing.expectEqual(@as(u8, 0), machine.memory[0x301]);
+        try std.testing.expectEqual(@as(u8, 9), machine.memory[0x302]);
+    }
+
+    test "FX33 handles the largest byte" {
+        var machine = testMachine(&.{
+            // 0x200: A300 -> I = 0x300
+            0xA3, 0x00,
+            // 0x202: 60FF -> V0 = 255
+            0x60, 0xFF,
+            // 0x204: F033 -> store 2, 5, 5 at I
+            0xF0, 0x33,
+        });
+
+        for (0..3) |_| {
+            try machine.step();
+        }
+
+        try std.testing.expectEqual(@as(u8, 2), machine.memory[0x300]);
+        try std.testing.expectEqual(@as(u8, 5), machine.memory[0x301]);
+        try std.testing.expectEqual(@as(u8, 5), machine.memory[0x302]);
+    }
+
+    test "FX33 leaves I where it was" {
+        var machine = testMachine(&.{
+            // 0x200: A300 -> I = 0x300
+            0xA3, 0x00,
+            // 0x202: 609C -> V0 = 156
+            0x60, 0x9C,
+            // 0x204: F033 -> store the digits at I
+            0xF0, 0x33,
+        });
+
+        for (0..3) |_| {
+            try machine.step();
+        }
+
+        // unlike FX55 and FX65, this one does not advance I
+        try std.testing.expectEqual(@as(u16, 0x300), machine.i);
+    }
+
+    test "FX33 reads register X, not V0" {
+        var machine = testMachine(&.{
+            // 0x200: A300 -> I = 0x300
+            0xA3, 0x00,
+            // 0x202: 659C -> V5 = 156
+            0x65, 0x9C,
+            // 0x204: F533 -> store the digits of V5 at I
+            0xF5, 0x33,
+        });
+
+        for (0..3) |_| {
+            try machine.step();
+        }
+
+        // reading V0 instead would write 0, 0, 0
+        try std.testing.expectEqual(@as(u8, 1), machine.memory[0x300]);
+        try std.testing.expectEqual(@as(u8, 5), machine.memory[0x301]);
+        try std.testing.expectEqual(@as(u8, 6), machine.memory[0x302]);
     }
 };
