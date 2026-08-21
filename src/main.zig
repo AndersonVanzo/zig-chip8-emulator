@@ -2,7 +2,7 @@ const std = @import("std");
 const emulator = @import("zig_chip8_emulator");
 
 // how many instructions to run before drawing
-const cycle_budget = 200;
+const cycle_budget = 700;
 
 pub fn main(init: std.process.Init) !void {
     // lives as long as the process lives
